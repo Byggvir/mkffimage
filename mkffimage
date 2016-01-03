@@ -6,27 +6,43 @@ GLUONDIR=gluon
 GLUONVER=v2015.1.x
 if [ ! -d "$GLUONDIR/$GLUONVER" ]
 then
-  pushd "$GLUONDIR"
+### Verzeichnis existiert noch nicht ###
+  mkdir -p "$GLUONDIR/$GLUONVER"
+  pushd "$GLUONDIR/$GLUONVER"
   git clone https://github.com/freifunk-gluon/gluon.git -b v2015.1.x
   popd
 else 
-  pushd "$GLUONDIR/$GLUONVER"
+### Verzeichnis vorhanden, auffrischen ###  
+  pushd "$GLUONDIR/$GLUONVER/gluon"
   git pull https://github.com/freifunk-gluon/gluon.git v2015.1.x
+  make dirclean
   popd
 fi
-pushd "$GLUONDIR/$GLUONVER"
 
-make dirclean
+### Wir brauchen noch die Site Infos ###
+pushd "$GLUONDIR/$GLUONVER/gluon"
+
+if [ ! -d site ]
+then 
+  git clone https://github.com/Byggvir/ff-rhb.git site 
+else
+  pushd site
+  git pull https://github.com/Byggvir/ff-rhb.git master
+  popd
+fi
+
+### Alles bereit um die Firmware zu ersetllen ###
+
 make update
 make clean GLUON_TARGET=ar71xx-generic
-make -j5 GLUON_TARGET=ar71xx-generic
-make clean GLUON_TARGET=ar71xx-nand
-make -j5 GLUON_TARGET=ar71xx-nand
-make clean GLUON_TARGET=mpc85xx-generic
-make -j5 GLUON_TARGET=mpc85xx-generic
-make clean GLUON_TARGET=x86-generic
-make -j5 GLUON_TARGET=x86-generic
-make clean GLUON_TARGET=x86-kvm_guest
-make -j5 GLUON_TARGET=x86-kvm_guest
+make -j6 GLUON_TARGET=ar71xx-generic
+#make clean GLUON_TARGET=ar71xx-nand
+#make -j5 GLUON_TARGET=ar71xx-nand
+#make clean GLUON_TARGET=mpc85xx-generic
+#make -j5 GLUON_TARGET=mpc85xx-generic
+#make clean GLUON_TARGET=x86-generic
+#make -j5 GLUON_TARGET=x86-generic
+#make clean GLUON_TARGET=x86-kvm_guest
+#make -j5 GLUON_TARGET=x86-kvm_guest
 
 popd
