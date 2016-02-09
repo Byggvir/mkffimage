@@ -1,52 +1,68 @@
 #!/bin/sh
 # Thomas Arend
-# 03.01.2016
+# 09.02.2016
 
-GLUONDIR=gluon
-GLUONVER=v2015.1.x
+GLUONDIR=$HOME/gluon	# Hier das Arbeitsverzeichnis für die Erstellung der Firmware eintragen
+GLUONVER=v2016.1.x	# Hier den Gluon Branch eintragen
+SITEVER=v2016.1		# Hier den Branch der Site-Konfiguration eintragen
+
 if [ ! -d "$GLUONDIR/$GLUONVER" ]
 then
 ### Verzeichnis existiert noch nicht ###
-  mkdir -p "$GLUONDIR/$GLUONVER"
-  pushd "$GLUONDIR/$GLUONVER"
-  git clone https://github.com/freifunk-gluon/gluon.git -b v2015.1.x
+  pushd "$GLUONDIR"
+  git clone -b $GLUONVER https://github.com/freifunk-gluon/gluon.git $GLUONVER 
   popd
 else 
 ### Verzeichnis vorhanden, auffrischen ###  
-  pushd "$GLUONDIR/$GLUONVER/gluon"
-  git pull https://github.com/freifunk-gluon/gluon.git v2015.1.x
+  pushd "$GLUONDIR/$GLUONVER"
+  git pull https://github.com/freifunk-gluon/gluon.git
   make dirclean
   popd
 fi
 
 ### Wir brauchen noch die Site Infos ###
-pushd "$GLUONDIR/$GLUONVER/gluon"
+
+pushd "$GLUONDIR/$GLUONVER"
 
 if [ ! -d site ]
 then 
-  git clone https://github.com/Byggvir/ff-rhb.git site 
+  git clone -b $SITEVER https://github.com/Byggvir/ff-rhb.git site 
 else
   pushd site
-  git pull https://github.com/Byggvir/ff-rhb.git master
+  git pull https://github.com/Byggvir/ff-rhb.git $SITEVER
   popd
 fi
 
-### Alles bereit um die Firmware zu ersetllen ###
+### Hier wird die Rheinbacher Status-Seite eingebunden. 
+### Achtung: Die Statusseite funktioniert nur mit Gluon v2015.1.2 
+
+pushd package
+if [ ! -d gluon-status-page-rheinbach ]
+then 
+  git clone https://github.com/Byggvir/gluon-status-page-rheinbach.git gluon-status-page-rheinbach 
+else
+  pushd gluon-status-page-rheinbach
+    git pull https://github.com/Byggvir/gluon-status-page-rheinbach.git
+  popd
+fi
+popd
+### Alles bereit um die Firmware zu erstellen ###
+
 
 make update
-make clean GLUON_TARGET=ar71xx-generic
-make GLUON_TARGET=ar71xx-generic
+make V=s clean GLUON_TARGET=ar71xx-generic
+make V=s GLUON_TARGET=ar71xx-generic >/tmp/mkffimage.log 2>&1
 
-## Die folgenden Targets betreffen nur wenige 7 Router.
-## Daher wird auf die Erstellung dieser Images verzichtet.
+## Die folgenden Targets betreffen nur 7 Router.
+## Daher kann ggf. auf die Erstellung dieser Images verzichtet werden.
 
-# make clean GLUON_TARGET=ar71xx-nand
-# make GLUON_TARGET=ar71xx-nand
-# make clean GLUON_TARGET=mpc85xx-generic
-# make GLUON_TARGET=mpc85xx-generic
-# make clean GLUON_TARGET=x86-generic
-# make GLUON_TARGET=x86-generic
-# make clean GLUON_TARGET=x86-kvm_guest
-# make GLUON_TARGET=x86-kvm_guest
+make clean GLUON_TARGET=ar71xx-nand
+make GLUON_TARGET=ar71xx-nand
+make clean GLUON_TARGET=mpc85xx-generic
+make GLUON_TARGET=mpc85xx-generic
+make clean GLUON_TARGET=x86-generic
+make GLUON_TARGET=x86-generic
+make clean GLUON_TARGET=x86-kvm_guest
+make GLUON_TARGET=x86-kvm_guest
 
 popd
