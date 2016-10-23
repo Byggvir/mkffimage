@@ -3,6 +3,7 @@
 # 03.10.2016
 
 GLUONDIR=$HOME/gluon
+BRANNCH=stable
 
 if [ -z "$1" ]
 then
@@ -13,28 +14,28 @@ fi
 
 if [ -z "$2" ]
 then
-  SITEVER=$GLUONVER
+  SITEVER=${GLUONVER}
 else
-  SITEVER=$2 
+  SITEVER=${GLUONVER}-$2 
+  BRANCH=${BRANCH}-$2
 fi
-
 
 function mktarget () {
 
-  make V=s clean GLUON_TARGET=$1 >$HOME/__tmp/mkffimage-$1-a.log 2>&1
-  make V=s GLUON_TARGET=$1 >$HOME/__tmp/mkffimage-$1-b.log 2>&1
+  make V=s clean GLUON_TARGET=$1 >$HOME/__tmp/${SITEVER}-mkffimage-$1-a.log 2>&1
+  make V=s GLUON_TARGET=$1 >$HOME/__tmp/${SITEVER}-mkffimage-$1-b.log 2>&1
 
 }
 
-if [ ! -d "$GLUONDIR/$SITEVER" ]
+if [ ! -d "${GLUONDIR}/${SITEVER}" ]
 then
 ### Verzeichnis existiert noch nicht ###
-  pushd "$GLUONDIR"
-  git clone -b $GLUONVER https://github.com/freifunk-gluon/gluon.git $SITEVER 
+  pushd "${GLUONDIR}"
+  git clone -b ${GLUONVER} https://github.com/freifunk-gluon/gluon.git ${SITEVER} 
   popd
 else 
 ### Verzeichnis vorhanden, auffrischen ###  
-  pushd "$GLUONDIR/$SITEVER"
+  pushd "${GLUONDIR}/${SITEVER}"
   git pull https://github.com/freifunk-gluon/gluon.git
   ## make dirclean
   popd
@@ -42,14 +43,14 @@ fi
 
 ### Wir brauchen noch die Site Infos ###
 
-pushd "$GLUONDIR/$SITEVER"
+pushd "${GLUONDIR}/${SITEVER}"
 
 if [ ! -d site ]
 then 
-  git clone -b $SITEVER https://github.com/Byggvir/ff-rhb.git site 
+  git clone -b ${SITEVER} https://github.com/Byggvir/ff-rhb.git site 
 else
   pushd site
-  git pull https://github.com/Byggvir/ff-rhb.git $SITEVER
+  git pull https://github.com/Byggvir/ff-rhb.git ${SITEVER}
   popd
 fi
 
@@ -65,9 +66,9 @@ fi
 #popd
 ### Alles bereit um die Firmware zu erstellen ###
 
-rm $HOME/__tmp/mkffimage*.log
+rm $HOME/__tmp/${SITEVER}-mkffimage*.log
 
-make update >$HOME/__tmp/mkffimage.log 2>&1
+make update >$HOME/__tmp/${SITEVER}-mkffimage.log 2>&1
 
 ## Die folgenden Targets ar71xx-nand mpc85xx-generic x86-generic x86-kvm_guest betreffen nur 7 Router.
 ## Daher kann ggf. auf die Erstellung dieser Images verzichtet werden.
@@ -75,19 +76,22 @@ make update >$HOME/__tmp/mkffimage.log 2>&1
 for TARGET in \
   ar71xx-generic \
   ar71xx-nand \
-  ar71xx-mikrotil \
+  brcm2708-bcm2708 \
+  brcm2708-bcm2709 \
   mpc85xx-generic \
   x86-64 \
   x86-generic \
   x86-kvm_guest \
   x86-xen_domu \
-  brcm2708-bcm2708 \
-  brcm2708-bcm2709 \
-  ramips-mt7621 \
-  ramips-rt305x \
-  sunxi 
+  
+#  ramips-mt7621 \
+#  ramips-rt305x \
+#  sunxi 
 do
-  mktarget $TARGET
+  mktarget ${TARGET}
 done
+
+make manifest GLUON_BRANCH=${BRANCH} GLUON_PRIORITY=1
+./contrib/sign.sh $HOME/.ecdsa/thomas.secret output/images/sysupgrade/${BRANCH}.manifest
 
 popd
