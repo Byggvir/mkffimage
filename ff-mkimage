@@ -15,9 +15,12 @@ SITEVER=${GLUONVER}
 
 BRANCH=`$DIALOG --inputbox BRANCH ${SITEVER}`
 
+GLUON_RELEASE=`$DIALOG --inputbox GLUON_RELEASE "v2017.1.4-$(date '+%Y%m%d')-${BRANCH}"`
+
 if [ $BRANCH != "master" ] 
 then 
   $DIALOG --yesno "USB-Support" && USB="YES" && BRANCH="${BRANCH}usb" && SITEVER="${SITEVER}-usb"
+  GLUON_RELEASE="${GLUON_RELEASE}-usb"
 else
   USB="YES"
 fi
@@ -33,8 +36,8 @@ echo "BRANCH: $BRANCH"
 
 function mktarget () {
 
-  make V=s clean GLUON_TARGET=$1 >$HOME/__tmp/${SITEVER}-mkffimage-$1-a.log 2>&1
-  make V=s GLUON_TARGET=$1 >$HOME/__tmp/${SITEVER}-mkffimage-$1-b.log 2>&1
+  make V=s clean GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >$HOME/__tmp/${SITEVER}-mkffimage-$1-a.log 2>&1
+  make V=s GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${SITEVER}-mkffimage-$1-b.log 2>&1
 
 }
 
@@ -105,7 +108,7 @@ do
   mktarget ${TARGET}
 done
 
-make manifest GLUON_BRANCH=${BRANCH} GLUON_PRIORITY=1
+make manifest GLUON_BRANCH=${BRANCH} GLUON_RELEASE="$GLUON_RELEASE" GLUON_PRIORITY=1
 ./contrib/sign.sh $HOME/.ecdsa/thomas.secret output/images/sysupgrade/${BRANCH}.manifest
 
 popd
