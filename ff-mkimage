@@ -1,24 +1,35 @@
-#!/bin/sh
+#!/bin/bash
 # Thomas Arend
 # 03.10.2016
 
-GLUONDIR=$HOME/gluon
-BRANNCH=stable
+# Erstellen eines Freifunk Image unter Debian
 
-if [ -z "$1" ]
-then
-  GLUONVER=v2016.2
+DIALOG='kdialog --title Make-FF-Images'
+
+GLUONGIT="https://github.com/freifunk-gluon/gluon.git"
+GLUONDIR=`$DIALOG --inputbox GLUONDIR "$HOME/gluon"`
+GLUONVER=`$DIALOG --inputbox GLUONVER "master"`
+
+SITEGIT="https://github.com/Byggvir/ff-rhb.git"
+SITEVER=${GLUONVER}
+
+BRANCH=`$DIALOG --inputbox BRANCH ${SITEVER}`
+
+if [ $BRANCH != "master" ] 
+then 
+  $DIALOG --yesno "USB-Support" && USB="YES" && BRANCH="${BRANCH}usb" && SITEVER="${SITEVER}-usb"
 else
-  GLUONVER=$1 
+  USB="YES"
 fi
 
-if [ -z "$2" ]
-then
-  SITEVER=${GLUONVER}
-else
-  SITEVER=${GLUONVER}-$2 
-  BRANCH=${BRANCH}-$2
-fi
+
+TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic x86-64 x86-generic" 
+#TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic x86-generic x86-geode x86-64 ramips-mt7620 ramips-mt7621 ramips-mt7628 ramips-rt305x" 
+#TARGETS="ar71xx-generic" 
+
+echo "VERSION (gluon): $GLUONVER"
+echo "VERSION (site): $SITEVER"
+echo "BRANCH: $BRANCH"
 
 function mktarget () {
 
@@ -31,14 +42,28 @@ if [ ! -d "${GLUONDIR}/${SITEVER}" ]
 then
 ### Verzeichnis existiert noch nicht ###
   pushd "${GLUONDIR}"
-  git clone -b ${GLUONVER} https://github.com/freifunk-gluon/gluon.git ${SITEVER} 
+  git clone -b ${GLUONVER} ${GLUONGIT} ${SITEVER} 
   popd
 else 
-### Verzeichnis vorhanden, auffrischen ###  
+### Verzeichnis vorhanden, auffrischen ###
+  if [ "$USB" = "YES" ]
+  then
+    rm "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/files/etc/hotplug.d/iface/50-gluon-wan-dnsmasq" 
+    rm "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/luasrc/lib/gluon/wan-dnsmasq/update.lua"
+  fi
   pushd "${GLUONDIR}/${SITEVER}"
-  git pull https://github.com/freifunk-gluon/gluon.git
+  git pull "${GLUONGIT}"
   ## make dirclean
   popd
+fi
+
+## USB Patch
+## Zusätzliche Schnittstellen tether und umts einrichten
+
+if [ "$USB" = "YES" ]
+then
+  patch "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/files/etc/hotplug.d/iface/50-gluon-wan-dnsmasq"  "${GLUONDIR}/patches/50-gluon-wan-dnsmasq.patch"
+  patch "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/luasrc/lib/gluon/wan-dnsmasq/update.lua" "${GLUONDIR}/patches/update.lua.patch"
 fi
 
 ### Wir brauchen noch die Site Infos ###
@@ -47,12 +72,13 @@ pushd "${GLUONDIR}/${SITEVER}"
 
 if [ ! -d site ]
 then 
-  git clone -b ${SITEVER} https://github.com/Byggvir/ff-rhb.git site 
+  git clone -b "${SITEVER}" "${SITEGIT}" site 
 else
   pushd site
-  git pull https://github.com/Byggvir/ff-rhb.git ${SITEVER}
+  git pull "${SITEGIT}" ${SITEVER}
   popd
 fi
+
 
 #pushd package
 #if [ ! -d gluon-status-page-rheinbach ]
@@ -64,30 +90,17 @@ fi
 #  popd
 #fi
 #popd
-### Alles bereit um die Firmware zu erstellen ###
+
+
+### Alte Log-Dateien löschen ###
 
 rm $HOME/__tmp/${SITEVER}-mkffimage*.log
 
+### Alles bereit um die Firmware zu erstellen ###
+
 make update >$HOME/__tmp/${SITEVER}-mkffimage.log 2>&1
 
-## Die folgenden Targets ar71xx-nand mpc85xx-generic x86-generic x86-kvm_guest betreffen nur 7 Router.
-## Daher kann ggf. auf die Erstellung dieser Images verzichtet werden.
-
-for TARGET in \
-  ar71xx-generic \
-  ar71xx-nand \
-  ar71xx-tiny \
-  brcm2708-bcm2708 \
-  brcm2708-bcm2709 \
-  mpc85xx-generic \
-  x86-64 \
-  x86-generic \
-#  x86-kvm_guest \ obsolet
-#  x86-xen_domu \ obsolet
-  
-#  ramips-mt7621 \
-#  ramips-rt305x \
-#  sunxi 
+for TARGET in ${TARGETS}
 do
   mktarget ${TARGET}
 done
