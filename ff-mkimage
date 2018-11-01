@@ -4,108 +4,115 @@
 
 # Erstellen eines Freifunk Image unter Debian
 
+NUM_CORES_PLUS_ONE=$(expr $(nproc) + 1)
+
 DIALOG='kdialog --title Make-FF-Images'
 
 GLUONGIT="https://github.com/freifunk-gluon/gluon.git"
 GLUONDIR=`$DIALOG --inputbox GLUONDIR "$HOME/gluon"`
 GLUONVER=`$DIALOG --inputbox GLUONVER "master"`
 
-SITEGIT="https://github.com/Byggvir/ff-rhb.git"
-SITEVER=${GLUONVER}
+# Additional packages for Rheinbach
 
-BRANCH=`$DIALOG --inputbox BRANCH ${SITEVER}`
+GLUONRHBPACKAGES="https://github.com/Byggvir/ff-rhb-packages.git"
 
-GLUON_RELEASE=`$DIALOG --inputbox GLUON_RELEASE "v2017.1.4-$(date '+%Y%m%d')-${BRANCH}"`
+# Site packages
 
-if [ $BRANCH != "master" ] 
-then 
-  $DIALOG --yesno "USB-Support" && USB="YES" && BRANCH="${BRANCH}usb" && SITEVER="${SITEVER}-usb"
-  GLUON_RELEASE="${GLUON_RELEASE}-usb"
-else
-  USB="YES"
-fi
+SITEGIT=`$DIALOG --inputbox SITEGIT "https://github.com/Byggvir/ff-rhb-site-l2tp.git"`
+SITEVER=`$DIALOG --inputbox SITEVER ${GLUONVER}`
 
+BRANCH=`$DIALOG --inputbox BRANCH stable`
 
-TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic x86-64 x86-generic" 
+GLUON_RELEASE=`$DIALOG --inputbox GLUON_RELEASE "${GLUONVER}-$(date '+%Y%m%d')-${BRANCH}"`
+
+$DIALOG --yesno "Quick build?"
+QUICK="$?"
+
+TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic ramips-mt7621 x86-64 x86-generic x86-geode" 
 #TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic x86-generic x86-geode x86-64 ramips-mt7620 ramips-mt7621 ramips-mt7628 ramips-rt305x" 
-#TARGETS="ar71xx-generic" 
+#TARGETS="ar71xx-tiny" 
 
 echo "VERSION (gluon): $GLUONVER"
 echo "VERSION (site): $SITEVER"
 echo "BRANCH: $BRANCH"
 
-function mktarget () {
+#----- Functions -----
 
-  make V=s clean GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >$HOME/__tmp/${SITEVER}-mkffimage-$1-a.log 2>&1
-  make V=s GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${SITEVER}-mkffimage-$1-b.log 2>&1
+function cleantarget () {
+
+  make clean GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${GLUONVER}-mkffimage-$1-a.log 2>&1
 
 }
 
-if [ ! -d "${GLUONDIR}/${SITEVER}" ]
+function maketarget () {
+
+  make -j$NUM_CORES_PLUS_ONE V=s GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${GLUONVER}-mkffimage-$1-b.log 2>&1
+
+}
+
+if [ $QUICK = 1 ]
+then
+
+if [ ! -d "${GLUONDIR}/${GLUONVER}" ]
 then
 ### Verzeichnis existiert noch nicht ###
   pushd "${GLUONDIR}"
-  git clone -b ${GLUONVER} ${GLUONGIT} ${SITEVER} 
+  git clone -b ${GLUONVER} ${GLUONGIT} ${GLUONVER} 
   popd
 else 
+
 ### Verzeichnis vorhanden, auffrischen ###
-  if [ "$USB" = "YES" ]
-  then
-    rm "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/files/etc/hotplug.d/iface/50-gluon-wan-dnsmasq" 
-    rm "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/luasrc/lib/gluon/wan-dnsmasq/update.lua"
-  fi
-  pushd "${GLUONDIR}/${SITEVER}"
-  git pull "${GLUONGIT}"
-  ## make dirclean
+  pushd "${GLUONDIR}/${GLUONVER}"
+  git pull
   popd
 fi
 
-## USB Patch
-## Zusätzliche Schnittstellen tether und umts einrichten
+### ---
+# Replace gluon-wan-dnsmasq with modified / additional RHB packages
 
-if [ "$USB" = "YES" ]
-then
-  patch "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/files/etc/hotplug.d/iface/50-gluon-wan-dnsmasq"  "${GLUONDIR}/patches/50-gluon-wan-dnsmasq.patch"
-  patch "${GLUONDIR}/${SITEVER}/package/gluon-wan-dnsmasq/luasrc/lib/gluon/wan-dnsmasq/update.lua" "${GLUONDIR}/patches/update.lua.patch"
-fi
+pushd "${GLUONDIR}/${GLUONVER}"
+
+rm -r ./package/gluon-wan-dnsmasq
+git clone -b master "${GLUONRHBPACKAGES}" ff-rhb-packages
+
+  pushd ff-rhb-packages
+  for D in * 
+  do
+    [ -d "$D" ] && cp -r "${D}" "../package/" 
+  done 
+  popd
 
 ### Wir brauchen noch die Site Infos ###
 
-pushd "${GLUONDIR}/${SITEVER}"
 
 if [ ! -d site ]
 then 
   git clone -b "${SITEVER}" "${SITEGIT}" site 
 else
   pushd site
-  git pull "${SITEGIT}" ${SITEVER}
+  git pull ### "${SITEGIT}" ${SITEVER}
   popd
 fi
 
-
-#pushd package
-#if [ ! -d gluon-status-page-rheinbach ]
-#then 
-#  git clone https://github.com/Byggvir/gluon-status-page-rheinbach.git gluon-status-page-rheinbach 
-#else
-#  pushd gluon-status-page-rheinbach
-#    git pull https://github.com/Byggvir/gluon-status-page-rheinbach.git
-#  popd
-#fi
-#popd
-
-
 ### Alte Log-Dateien löschen ###
 
-rm $HOME/__tmp/${SITEVER}-mkffimage*.log
+rm /tmp/${GLUONVER}-mkffimage*.log
 
 ### Alles bereit um die Firmware zu erstellen ###
 
-make update >$HOME/__tmp/${SITEVER}-mkffimage.log 2>&1
+make update >/tmp/${GLUONVER}-mkffimage.log 2>&1
+
+else
+
+pushd "${GLUONDIR}/${GLUONVER}"
+
+fi ## QUICK
 
 for TARGET in ${TARGETS}
 do
-  mktarget ${TARGET}
+  [ $QUICK = 0 ] || cleantarget  ${TARGET}
+  maketarget ${TARGET}
+
 done
 
 make manifest GLUON_BRANCH=${BRANCH} GLUON_RELEASE="$GLUON_RELEASE" GLUON_PRIORITY=1
