@@ -2,15 +2,22 @@
 # Thomas Arend
 # 03.10.2016
 
+# Um den Prozess stoppen zu können
+echo PID=$$
+
 # Erstellen eines Freifunk Image unter Debian
 
+TMPDIR=`mktemp -d`
+
 NUM_CORES_PLUS_ONE=$(expr $(nproc) + 1)
+#NUM_CORES_PLUS_ONE=1
 
 DIALOG='kdialog --title Make-FF-Images'
 
 GLUONGIT="https://github.com/freifunk-gluon/gluon.git"
-GLUONDIR=`$DIALOG --inputbox GLUONDIR "$HOME/gluon"`
-GLUONVER=`$DIALOG --inputbox GLUONVER "master"`
+
+GLUONDIR=`$DIALOG --inputbox GLUONDIR "$HOME/gluon/multi-domain"`
+GLUONVER=`$DIALOG --inputbox GLUONVER "v2018.2.x"`
 
 # Additional packages for Rheinbach
 
@@ -18,10 +25,11 @@ GLUONRHBPACKAGES="https://github.com/Byggvir/ff-rhb-packages.git"
 
 # Site packages
 
-SITEGIT=`$DIALOG --inputbox SITEGIT "https://github.com/Byggvir/ff-rhb-site-l2tp.git"`
-SITEVER=`$DIALOG --inputbox SITEVER ${GLUONVER}`
+SITEGIT=`$DIALOG --inputbox SITEGIT "git@github.com:Byggvir/multi-domain.git"`
+## SITEVER=`$DIALOG --inputbox SITEVER ${GLUONVER}`
+SITEVER=`$DIALOG --inputbox SITEVER 'master'`
 
-BRANCH=`$DIALOG --inputbox BRANCH stable`
+BRANCH=`$DIALOG --inputbox BRANCH testing`
 
 GLUON_RELEASE=`$DIALOG --inputbox GLUON_RELEASE "${GLUONVER}-$(date '+%Y%m%d')-${BRANCH}"`
 
@@ -29,10 +37,40 @@ $DIALOG --yesno "Quick build?"
 QUICK="$?"
 
 
+#  Targets inklusive BROKEN=1
+#
+#  * ar71xx-generic
+#  * ar71xx-tiny
+#  * ar71xx-nand
+#  * brcm2708-bcm2708
+#  * brcm2708-bcm2709
+#  * mpc85xx-generic
+#  * ramips-mt7621
+#  * sunxi-cortexa7
+#  * x86-generic
+#  * x86-geode
+#  * x86-64
+#  * ipq40xx
+#  * ramips-mt7620
+#  * ramips-mt76x8
+#  * ramips-rt305x
+#  * ar71xx-mikrotik
+#  * brcm2708-bcm2710
+#  * ipq806x
+#  * mvebu-cortexa9
 
-TARGETS="ar71xx-generic ar71xx-mikrotik ar71xx-nand ar71xx-tiny brcm2708-bcm2708 brcm2708-bcm2709 brcm2708-bcm2710 generic ipq40xx ipq806x mpc85xx-generic mvebu-cortexa9 ramips-mt7620 ramips-mt7621 ramips-mt76x8 ramips-rt305x sunxi-cortexa7 x86-64 x86-generic x86-geode" 
-#TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic x86-generic x86-geode x86-64 ramips-mt7620 ramips-mt7621 ramips-mt7628 ramips-rt305x" 
-#TARGETS="ar71xx-tiny" 
+# Mit BROKEN targets
+
+TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic ramips-mt7621 sunxi-cortexa7 x86-generic x86-geode x86-64 ipq40xx ramips-mt7620 ramips-mt76x8 ramips-rt305x ar71xx-mikrotik brcm2708-bcm2710 ipq806x mvebu-cortexa9" 
+
+# Ohne BROKEN targets
+#TARGETS="ar71xx-generic ar71xx-tiny ar71xx-nand brcm2708-bcm2708 brcm2708-bcm2709 mpc85xx-generic ramips-mt7621 sunxi-cortexa7 x86-generic x86-geode x86-64 ipq40xx ramips-mt7620 ramips-mt76x8 ramips-rt305x"
+
+#TARGETS="ar71xx-generic" 
+
+LIST=$(echo $TARGETS | sed 's#\([^ ]*\)#\1 \1 off#g')
+
+TARGETS=`$DIALOG --checklist Targets $LIST | sed 's#"##g'`
 
 echo "VERSION (gluon): $GLUONVER"
 echo "VERSION (site): $SITEVER"
@@ -42,13 +80,13 @@ echo "BRANCH: $BRANCH"
 
 function cleantarget () {
 
-  make clean GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${GLUONVER}-mkffimage-$1-a.log 2>&1
+  make clean GLUON_BRANCH="$BRANCH"  GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >$TMPDIR/${GLUONVER}-mkffimage-$1-a.log 2>&1
 
 }
 
 function maketarget () {
 
-  make -j$NUM_CORES_PLUS_ONE V=s GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >/tmp/${GLUONVER}-mkffimage-$1-b.log 2>&1
+  make -j$NUM_CORES_PLUS_ONE V=s BROKEN=1 GLUON_BRANCH="$BRANCH" GLUON_TARGET="$1" GLUON_RELEASE="$GLUON_RELEASE" >$TMPDIR/${GLUONVER}-mkffimage-$1-b.log 2>&1
 
 }
 
@@ -74,15 +112,16 @@ fi
 
 pushd "${GLUONDIR}/${GLUONVER}"
 
-rm -r ./package/gluon-wan-dnsmasq
-git clone -b master "${GLUONRHBPACKAGES}" ff-rhb-packages
-
-  pushd ff-rhb-packages
-  for D in * 
-  do
-    [ -d "$D" ] && cp -r "${D}" "../package/" 
-  done 
-  popd
+#rm -r ./package/gluon-wan-dnsmasq
+#git clone -b master "${GLUONRHBPACKAGES}" ff-rhb-packages
+#
+#  pushd ff-rhb-packages
+#  for D in * 
+#  do
+#    [ -d "$D" ] && cp -r "${D}" "../package/" 
+#  done 
+#  popd
+#
 
 ### Wir brauchen noch die Site Infos ###
 
@@ -98,11 +137,11 @@ fi
 
 ### Alte Log-Dateien löschen ###
 
-rm /tmp/${GLUONVER}-mkffimage*.log
+##rm $TMPDIR/${GLUONVER}-mkffimage*.log
 
 ### Alles bereit um die Firmware zu erstellen ###
 
-make update >/tmp/${GLUONVER}-mkffimage.log 2>&1
+make update >$TMPDIR/${GLUONVER}-mkffimage.log 2>&1
 
 else
 
